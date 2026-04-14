@@ -1475,7 +1475,13 @@
     initReactionActions();
     initFileUpload();
     initAjaxComposer();
-    initGroupSocket();
-    initNotifySocket();
+
+    const path = window.location.pathname || "";
+    const isChatOrMeeting = path.startsWith("/chat") || path.startsWith("/meetings");
+
+    if (isChatOrMeeting) {
+      initGroupSocket();
+      initNotifySocket();
+    }
   });
 })();

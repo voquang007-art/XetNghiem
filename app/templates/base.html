@@ -122,6 +122,8 @@
 <footer class="footer">
   Ứng dụng được phát triển bởi <i>Võ Như Minh Quang</i>
 </footer>
+{% if request.url.path.startswith('/chat') or request.url.path.startswith('/meetings') %}
 <script src="/static/chat/chat.js"></script>
+{% endif %}
 </body>
 </html>
