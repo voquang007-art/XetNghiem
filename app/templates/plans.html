@@ -1,0 +1,705 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container mt-3 plans-page">
+  <div class="d-flex justify-content-between align-items-center mb-3 page-head">
+    <h3 class="page-title"><i class="fas fa-calendar-alt"></i> Quản lý Kế hoạch</h3>
+    {% if allowed_creator_kinds and (allowed_creator_kinds|length > 0) %}
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addPlanModal">
+        <i class="fas fa-plus"></i> Tạo Kế hoạch mới
+      </button>
+    {% endif %}
+  </div>
+
+  <!-- BỘ LỌC: GIỮ NGUYÊN -->
+  <div class="card mb-3 plans-filter-card">
+    <div class="card-body">
+      <form method="get" action="/plans" class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label"><strong>Loại Kế hoạch:</strong></label>
+          <select name="kind" id="kind_select" class="form-select">
+            <option value="" {% if (selected_kind or '')=='' %}selected{% endif %}>Tất cả</option>
+            <option value="nhanvien" {% if selected_kind=='nhanvien' %}selected{% endif %}>Kế hoạch cá nhân</option>
+            <option value="nhom" {% if selected_kind=='nhom' %}selected{% endif %}>Kế hoạch nhóm</option>
+            <option value="khoa" {% if selected_kind=='khoa' %}selected{% endif %}>Kế hoạch khoa</option>
+            <option value="chat_luong" {% if selected_kind=='chat_luong' %}selected{% endif %}>Chức năng - Chất lượng</option>
+            <option value="ky_thuat" {% if selected_kind=='ky_thuat' %}selected{% endif %}>Chức năng - Kỹ thuật</option>
+            <option value="an_toan" {% if selected_kind=='an_toan' %}selected{% endif %}>Chức năng - An toàn</option>
+            <option value="vat_tu" {% if selected_kind=='vat_tu' %}selected{% endif %}>Công việc - Vật tư</option>
+            <option value="trang_thiet_bi" {% if selected_kind=='trang_thiet_bi' %}selected{% endif %}>Công việc - Trang thiết bị</option>
+            <option value="moi_truong" {% if selected_kind=='moi_truong' %}selected{% endif %}>Công việc - Môi trường</option>
+            <option value="cntt" {% if selected_kind=='cntt' %}selected{% endif %}>Công việc - CNTT</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label"><strong>Lọc theo:</strong></label>
+          <select name="filter_id" id="filter_select" class="form-select"
+                  data-selected-type="{{ selected_filter_type or '' }}"
+                  data-selected-id="{{ selected_filter_id or '' }}">
+            <option value="">-- Xem tất cả --</option>
+            {% if filterable_entities.units %}
+              <optgroup label="Phòng / Tổ">
+                {% for unit in filterable_entities.units %}
+                  <option value="{{ unit.id }}" data-type="unit">{{ unit.ten_don_vi }}</option>
+                {% endfor %}
+              </optgroup>
+            {% endif %}
+            {% if filterable_entities.users %}
+              <optgroup label="Nhân viên">
+                {% for u in filterable_entities.users %}
+                  <option value="{{ u.id }}" data-type="user">{{ u.full_name }}</option>
+                {% endfor %}
+              </optgroup>
+            {% endif %}
+          </select>
+          <input type="hidden" name="filter_type" id="filter_type_input" value="{{ selected_filter_type or '' }}">
+        </div>
+
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-info w-100">Lọc</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Danh sách kế hoạch -->
+  <div class="card plans-list-card">
+    <div class="card-header plans-list-header">
+      <strong>Danh sách kế hoạch</strong>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover table-striped mb-0 plans-main-table">
+        <thead class="table-dark">
+          <tr>
+            <th style="width:120px;">Tháng/Năm</th>
+            <th>Tiêu đề</th>
+            <th style="width:320px;">Đơn vị / Người tạo</th>
+            <th style="width:150px;">Ngày tạo</th>
+            <th style="width:250px;">Hành động</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for plan in plans %}
+          <tr id="plan-{{ plan.id }}">
+            <td><strong>{{ '%02d'|format(plan.month) }}/{{ plan.year }}</strong></td>
+            <td>
+              {{ plan.title }}
+              {% if plan._plan_kind_label %}
+                <div class="mt-1">
+                  <span class="badge bg-secondary plan-unit-badge">{{ plan._plan_kind_label }}</span>
+                </div>
+              {% endif %}
+            </td>
+            <td class="plan-owner-cell">
+              {% if plan.unit and plan.unit.ten_don_vi %}
+                <span class="badge bg-secondary plan-unit-badge">Đơn vị: {{ plan.unit.ten_don_vi }}</span><br>
+              {% endif %}
+              <small class="text-muted plan-creator-text">Người tạo: {{ plan._creator_name or '' }}</small>
+            </td>
+            <td class="plan-date-cell">{{ plan.created_at.strftime('%d-%m-%Y') if plan.created_at else '' }}</td>
+            <td class="plan-action-cell">
+              <div class="plan-actions">
+                <a href="{{ url_for('plan_details', plan_id=plan.id) }}" class="btn btn-sm btn-outline-primary plan-btn">
+                  Xem
+                </a>
+                {% if user and plan.created_by == user.id %}
+                  <a href="{{ url_for('plan_details', plan_id=plan.id) }}?mode=edit" class="btn btn-sm btn-outline-secondary plan-btn">Sửa</a>
+                  <form action="{{ url_for('delete_plan') }}" method="post" class="d-inline plan-delete-form" onsubmit="return confirm('Xóa kế hoạch này?');">
+                    <input type="hidden" name="plan_id" value="{{ plan.id }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger plan-btn">Xóa</button>
+                  </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+
+          {# Đã bỏ modal cập nhật ở danh sách.
+             Nút Sửa chuyển sang trang chi tiết ở chế độ sửa. #}
+
+          {% else %}
+          <tr><td colspan="5" class="text-center">Chưa có kế hoạch nào.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if selected_plan_id %}
+    {% set sel = plans|selectattr("id","equalto",selected_plan_id)|list %}
+    {% if sel and sel[0] %}
+      {% set _plan = sel[0] %}
+      <div class="card mt-3 plans-detail-card">
+        <div class="card-header plans-detail-header"><strong>Chi tiết kế hoạch:</strong> {{ _plan.title }}</div>
+        <div class="card-body plans-detail-body">
+
+          {% set _is_owner = (user and _plan.created_by == user.id) %}
+
+          <p class="mb-3">
+            <strong>Loại kế hoạch:</strong>
+            {{ _plan._plan_kind_label or (_plan.plan_kind or '-') }}
+          </p>
+
+          {% if _is_owner %}
+          <form action="{{ url_for('update_plan') }}" method="post">
+            <input type="hidden" name="plan_id" value="{{ _plan.id }}">
+
+            {% if _edit_mode %}
+              <div class="row mb-3">
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">Tiêu đề</label>
+                  <input type="text" class="form-control" name="title" value="{{ _plan.title }}" required>
+                </div>
+
+                <div class="col-md-3 mb-3">
+                  <label class="form-label">Tháng</label>
+                  <select class="form-select" name="month" required>
+                    {% for mm in range(1, 13) %}
+                      <option value="{{ mm }}" {% if mm == _plan.month %}selected{% endif %}>{{ mm }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+
+                <div class="col-md-3 mb-3">
+                  <label class="form-label">Năm</label>
+                  <input type="number" class="form-control" name="year" value="{{ _plan.year }}" required>
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Mô tả</label>
+                <textarea class="form-control" name="description" rows="3">{{ _plan.description or '' }}</textarea>
+              </div>
+            {% else %}
+              <input type="hidden" name="title" value="{{ _plan.title }}">
+              <input type="hidden" name="month" value="{{ _plan.month }}">
+              <input type="hidden" name="year" value="{{ _plan.year }}">
+              <input type="hidden" name="description" value="{{ _plan.description or '' }}">
+            {% endif %}
+          {% endif %}
+
+    <div class="table-responsive">
+      <table class="table table-bordered plans-detail-table">
+              <thead class="table-light">
+                <tr>
+                  <th style="width:70px;">STT</th>
+                  <th>Nội dung công việc</th>
+                  <th style="width:230px;">Thời gian thực hiện</th>
+                  <th style="width:250px;">Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for it in (_plan.items or []) %}
+                <tr>
+                  <td>{{ loop.index }}</td>
+                                    {% set _start_parts = (it._period_label or '').replace('Từ ', '').replace(' đến ', '|').split('|') %}
+                  {% set _start_raw = _start_parts[0] if _start_parts|length > 0 else '' %}
+                  {% set _end_raw = _start_parts[1] if _start_parts|length > 1 else '' %}
+                  {% set _s = _start_raw.split('-') if _start_raw else [] %}
+                  {% set _e = _end_raw.split('-') if _end_raw else [] %}
+
+                  <td>
+                    {% if _is_owner and _edit_mode %}
+                      <input type="text" class="form-control form-control-sm" name="item_contents[]" value="{{ it._content_visible }}">
+                    {% elif _is_owner %}
+                      {{ it._content_visible }}
+                      <input type="hidden" name="item_contents[]" value="{{ it._content_visible }}">
+                    {% else %}
+                      {{ it._content_visible }}
+                    {% endif %}
+                  </td>
+
+                  <td>
+                    {% if _is_owner and _edit_mode %}
+                      <div class="d-flex align-items-center gap-1 flex-wrap">
+                        <span>Từ</span>
+                        <select class="form-select form-select-sm" name="item_start_d[]" style="width:70px;">
+                          {% for d in range(1, 32) %}
+                            {% set dd = "%02d"|format(d) %}
+                            <option value="{{ dd }}" {% if _s|length > 0 and _s[0] == dd %}selected{% endif %}>{{ d }}</option>
+                          {% endfor %}
+                        </select>
+
+                        <select class="form-select form-select-sm" name="item_start_m[]" style="width:70px;">
+                          {% for mo in range(1, 13) %}
+                            {% set mm = "%02d"|format(mo) %}
+                            <option value="{{ mm }}" {% if _s|length > 1 and _s[1] == mm %}selected{% endif %}>{{ mo }}</option>
+                          {% endfor %}
+                        </select>
+
+                        <span>đến</span>
+
+                        <select class="form-select form-select-sm" name="item_end_d[]" style="width:70px;">
+                          {% for d in range(1, 32) %}
+                            {% set dd = "%02d"|format(d) %}
+                            <option value="{{ dd }}" {% if _e|length > 0 and _e[0] == dd %}selected{% endif %}>{{ d }}</option>
+                          {% endfor %}
+                        </select>
+
+                        <select class="form-select form-select-sm" name="item_end_m[]" style="width:70px;">
+                          {% for mo in range(1, 13) %}
+                            {% set mm = "%02d"|format(mo) %}
+                            <option value="{{ mm }}" {% if _e|length > 1 and _e[1] == mm %}selected{% endif %}>{{ mo }}</option>
+                          {% endfor %}
+                        </select>
+                      </div>
+
+                      <input type="hidden" name="item_start_y[]" value="{{ _s[2] if _s|length > 2 else _plan.year }}">
+                      <input type="hidden" name="item_end_y[]" value="{{ _e[2] if _e|length > 2 else _plan.year }}">
+                    {% elif _is_owner %}
+                      {{ it._period_label }}
+                      <input type="hidden" name="item_start_d[]" value="{{ _s[0] if _s|length > 0 else '' }}">
+                      <input type="hidden" name="item_start_m[]" value="{{ _s[1] if _s|length > 1 else '' }}">
+                      <input type="hidden" name="item_start_y[]" value="{{ _s[2] if _s|length > 2 else _plan.year }}">
+                      <input type="hidden" name="item_end_d[]" value="{{ _e[0] if _e|length > 0 else '' }}">
+                      <input type="hidden" name="item_end_m[]" value="{{ _e[1] if _e|length > 1 else '' }}">
+                      <input type="hidden" name="item_end_y[]" value="{{ _e[2] if _e|length > 2 else _plan.year }}">
+                    {% else %}
+                      {{ it._period_label }}
+                    {% endif %}
+                  </td>
+
+                  <td>
+                    {% if _is_owner %}
+                      <select class="form-select form-select-sm" name="item_statuses[]">
+                        <option value="Chưa hoàn thành" {% if it._status_label == 'Chưa hoàn thành' %}selected{% endif %}>Chưa hoàn thành</option>
+                        <option value="Đang thực hiện" {% if it._status_label == 'Đang thực hiện' %}selected{% endif %}>Đang thực hiện</option>
+                        <option value="Đã hoàn thành" {% if it._status_label == 'Đã hoàn thành' %}selected{% endif %}>Đã hoàn thành</option>
+                        <option value="Chuyển kỳ sau" {% if it._status_label == 'Chuyển kỳ sau' %}selected{% endif %}>Chuyển kỳ sau</option>
+                      </select>
+                    {% else %}
+                      <select class="form-select form-select-sm" disabled>
+                        <option {% if it._status_label == 'Chưa hoàn thành' %}selected{% endif %}>Chưa hoàn thành</option>
+                        <option {% if it._status_label == 'Đang thực hiện' %}selected{% endif %}>Đang thực hiện</option>
+                        <option {% if it._status_label == 'Đã hoàn thành' %}selected{% endif %}>Đã hoàn thành</option>
+                        <option {% if it._status_label == 'Chuyển kỳ sau' %}selected{% endif %}>Chuyển kỳ sau</option>
+                      </select>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+                {% if (_plan.items or [])|length == 0 %}
+                <tr><td colspan="4"><em>Chưa có mục kế hoạch.</em></td></tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+
+          {% if _is_owner %}
+          <div class="mt-3 d-flex justify-content-end gap-2">
+            {% if _edit_mode %}
+              <a href="{{ url_for('plan_details', plan_id=_plan.id) }}" class="btn btn-secondary">Hủy sửa</a>
+              <button type="submit" class="btn btn-primary">Lưu thay đổi kế hoạch</button>
+            {% else %}
+              <button type="submit" class="btn btn-primary">Lưu trạng thái</button>
+            {% endif %}
+          </div>
+          </form>
+          {% endif %}
+
+        </div>
+      </div>
+    {% endif %}
+  {% endif %}
+
+</div>
+
+{% if allowed_creator_kinds and (allowed_creator_kinds|length > 0) %}
+<!-- Modal tạo kế hoạch: BỎ ô Năm trong cụm thời gian; giảm width ngày/tháng; không có dropdown trạng thái -->
+<div class="modal fade" id="addPlanModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <form action="{{ url_for('add_plan') }}" method="post">
+      <div class="modal-header">
+        <h5 class="modal-title">Tạo kế hoạch mới</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Tiêu đề</label>
+            <input type="text" class="form-control" name="title" required>
+          </div>
+          <div class="col-md-3 mb-3">
+            <label class="form-label">Tháng</label>
+            <select class="form-select" name="month" required>
+              {% for mm in range(1,13) %}<option value="{{ mm }}">{{ mm }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3 mb-3">
+            <label class="form-label">Năm</label>
+            <input type="number" class="form-control" name="year" value="{{ now().year }}" required>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Mô tả</label>
+            <textarea class="form-control" name="description" rows="3" placeholder="Mô tả ngắn (tuỳ chọn)"></textarea>
+          </div>
+
+          <div class="col-md-3 mb-3">
+            <label class="form-label">Đơn vị</label>
+            <select class="form-select" name="unit_id" required>
+              {% for unit in filterable_entities.units %}
+                <option value="{{ unit.id }}">{{ unit.ten_don_vi }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-3 mb-3">
+            <label class="form-label">Loại Kế hoạch</label>
+            <select class="form-select" name="creator_kind" required>
+              <option value="">— Chọn loại —</option>
+              {% for x in allowed_creator_kinds %}
+                <option value="{{ x.value }}">{{ x.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <hr>
+        <div class="mb-2"><strong>Danh mục công việc</strong></div>
+
+<style>
+.plans-page{
+  background:linear-gradient(180deg,#FCFEFF 0%,#F8FBFD 100%);
+}
+.plans-page .page-head{
+  margin-bottom:16px;
+  padding-bottom:10px;
+  border-bottom:2px solid #E4EEF5;
+}
+.plans-page .page-title{
+  margin:0;
+  color:#0F4C81;
+  font-weight:800;
+}
+.plans-page .plans-filter-card,
+.plans-page .plans-list-card,
+.plans-page .plans-detail-card{
+  border-color:#DCE8F1;
+  border-radius:16px;
+  overflow:hidden;
+  box-shadow:0 6px 18px rgba(15,76,129,.05);
+}
+.plans-page .plans-filter-card .card-body{
+  padding:18px;
+  background:linear-gradient(180deg,#F9FCFE 0%,#F2F8FB 100%);
+}
+.plans-page .plans-list-header{
+  background:linear-gradient(180deg,#F7FBFE 0%,#EEF6FB 100%);
+  color:#0F4C81;
+  font-weight:800;
+  border-bottom:1px solid #DCE8F1;
+}
+.plans-page .plans-list-card .table{
+  margin-bottom:0;
+}
+.plans-page .plans-main-table td{
+  vertical-align:middle;
+}
+.plans-page .plans-main-table th{
+  white-space:nowrap;
+}
+.plans-page .plan-owner-cell{
+  line-height:1.55;
+}
+.plans-page .plan-unit-badge{
+  margin-bottom:6px;
+}
+.plans-page .plan-creator-text{
+  color:#64748B;
+  font-size:12px;
+}
+.plans-page .plan-date-cell{
+  white-space:nowrap;
+}
+.plans-page .plan-action-cell{
+  white-space:nowrap;
+}
+.plans-page .plan-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+}
+.plans-page .plan-btn{
+  min-width:64px;
+  font-weight:700;
+}
+.plans-page .plan-delete-form{
+  display:inline-block;
+  margin:0;
+}
+
+.plans-page .plans-detail-header{
+  background:linear-gradient(180deg,#EEF6FB 0%,#E5F0F8 100%);
+  color:#0F4C81;
+  font-weight:800;
+  border-bottom:1px solid #D8E4EE;
+}
+.plans-page .plans-detail-body{
+  background:linear-gradient(180deg,#FFFFFF 0%,#FBFDFF 100%);
+}
+.plans-page .plans-detail-table td{
+  vertical-align:middle;
+}
+.plans-page .table thead.table-dark th{
+  background:linear-gradient(180deg,#0F4C81 0%,#1D6FA5 100%);
+  color:#FFFFFF;
+  border-color:#2D6D98;
+}
+.plans-page .table thead.table-light th{
+  background:linear-gradient(180deg,#F2F8FC 0%,#E8F2F8 100%);
+  color:#0F4C81;
+  border-color:#D7E5EF;
+}
+.plans-page .badge.bg-secondary{
+  background:#E8F1F8 !important;
+  color:#0F4C81 !important;
+  border:1px solid #CFE0EC;
+  padding:6px 10px;
+  font-weight:700;
+  border-radius:999px;
+}
+.plans-page .modal-content{
+  border:1px solid #D8E4EE;
+  border-radius:16px;
+  overflow:hidden;
+}
+.plans-page .modal-header{
+  background:linear-gradient(180deg,#F7FBFE 0%,#EEF6FB 100%);
+  border-bottom:1px solid #DCE8F1;
+}
+.plans-page .modal-title{
+  color:#0F4C81;
+  font-weight:800;
+}
+.plans-page .modal-body{
+  background:#FBFDFF;
+}
+.plans-page .modal-footer{
+  background:#FAFCFE;
+  border-top:1px solid #E4EDF4;
+}
+.plans-page .form-label{
+  color:#334155;
+  font-weight:700;
+}
+.plans-page .btn-info{
+  color:#FFFFFF;
+  background:linear-gradient(135deg,#0E7490 0%,#1D6FA5 100%);
+  border-color:transparent;
+}
+.plans-page .btn-outline-primary,
+.plans-page .btn-outline-secondary,
+.plans-page .btn-outline-danger{
+  font-weight:700;
+}
+
+.kl-row{
+  display:grid;
+  grid-template-columns:48px 3fr 520px 40px;
+  gap:12px;
+  align-items:center;
+  padding:12px;
+  border:1px solid #E4EDF4;
+  border-radius:12px;
+  background:#FFFFFF;
+}
+.kl-no input{
+  text-align:center;
+  font-weight:700;
+  background:#F8FBFD;
+}
+.kl-wide input{
+  width:100%;
+}
+.kl-time > div:first-child{
+  margin-bottom:4px;
+}
+.kl-time .inline-date{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:nowrap;
+}
+.kl-time .inline-date strong{
+  color:#475569;
+  font-size:13px;
+}
+.kl-time .inline-date select{
+  min-width:56px;
+  width:56px;
+}
+#planItems{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+@media (max-width: 1200px){
+  .kl-row{
+    grid-template-columns:48px 1fr 1fr;
+  }
+  .kl-act{
+    grid-column:3;
+    justify-self:end;
+  }
+}
+@media (max-width: 768px){
+  .kl-row{
+    grid-template-columns:48px 1fr;
+  }
+  .kl-time,
+  .kl-act{
+    grid-column:1 / -1;
+  }
+  .plans-page .plan-actions{
+    flex-direction:column;
+    align-items:stretch;
+  }
+}
+</style>
+
+        <div id="planItems">
+          <div class="kl-row mb-2">
+            <div class="kl-no"><input type="text" class="form-control" value="1" disabled></div>
+            <div class="kl-wide">
+              <input type="text" class="form-control" name="item_contents[]" placeholder="Nội dung công việc">
+            </div>
+
+            <div class="kl-time">
+              <div><small class="text-muted">Thời gian thực hiện</small></div>
+              <div class="inline-date">
+                <strong>Từ</strong>
+                <select class="form-select" name="item_start_d[]">{% for d in range(1,32) %}<option value="{{ '%02d'|format(d) }}">{{ d }}</option>{% endfor %}</select>
+                <select class="form-select" name="item_start_m[]">{% for mo in range(1,13) %}<option value="{{ '%02d'|format(mo) }}">{{ mo }}</option>{% endfor %}</select>
+                <strong>đến</strong>
+                <select class="form-select" name="item_end_d[]">{% for d in range(1,32) %}<option value="{{ '%02d'|format(d) }}">{{ d }}</option>{% endfor %}</select>
+                <select class="form-select" name="item_end_m[]">{% for mo in range(1,13) %}<option value="{{ '%02d'|format(mo) }}">{{ mo }}</option>{% endfor %}</select>
+              </div>
+              <div class="mt-2">
+                <select class="form-select" name="item_statuses[]">
+                  <option value="Chưa hoàn thành" selected>Chưa hoàn thành</option>
+                  <option value="Đang thực hiện">Đang thực hiện</option>
+                  <option value="Đã hoàn thành">Đã hoàn thành</option>
+                  <option value="Chuyển kỳ sau">Chuyển kỳ sau</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="kl-act">
+              <button type="button" class="btn btn-outline-secondary" onclick="addItemRow()">+</button>
+            </div>
+          </div>
+
+            <div class="kl-act">
+              <button type="button" class="btn btn-outline-secondary" onclick="addItemRow()">+</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+        <button type="submit" class="btn btn-primary">Tạo</button>
+      </div>
+    </form>
+  </div></div>
+</div>
+{% endif %}
+
+<script>
+(function(){
+  const form = document.querySelector('form[action="/plans"]'); if (!form) return;
+  const select = form.querySelector('#filter_select');
+  const hidden = form.querySelector('#filter_type_input');
+  function syncType(){
+    const opt = select.options[select.selectedIndex];
+    hidden.value = (opt && opt.getAttribute('data-type')) ? opt.getAttribute('data-type') : '';
+  }
+  (function restore(){
+    const st = select.getAttribute('data-selected-type') || '';
+    const sid = select.getAttribute('data-selected-id') || '';
+    if (sid){
+      for (let i=0;i<select.options.length;i++){
+        const o = select.options[i];
+        if (o.value===sid && (o.getAttribute('data-type')||'')===st){ o.selected=true; break; }
+      }
+      syncType();
+    }
+  })();
+  select.addEventListener('change', syncType);
+  form.addEventListener('submit', syncType);
+})();
+
+function addItemRow(){
+  const wr = document.getElementById('planItems');
+  const idx = wr.querySelectorAll('.kl-row').length + 1;
+
+  const dayOpts = (()=>{ let s=''; for(let d=1; d<=31; d++){ const dd=(d<10?('0'+d):d); s+=`<option value="${dd}">${d}</option>`;} return s; })();
+  const monOpts = (()=>{ let s=''; for(let m=1; m<=12; m++){ const mm=(m<10?('0'+m):m); s+=`<option value="${mm}">${m}</option>`;} return s; })();
+
+  const row = document.createElement('div');
+  row.innerHTML = `
+    <div class="kl-no"><input type="text" class="form-control" value="${idx}" disabled></div>
+    <div class="kl-wide"><input type="text" class="form-control" name="item_contents[]" placeholder="Nội dung công việc"></div>
+    <div class="kl-time">
+      <div><small class="text-muted">Thời gian thực hiện</small></div>
+      <div class="inline-date">
+        <strong>Từ</strong>
+        <select class="form-select" name="item_start_d[]">${dayOpts}</select>
+        <select class="form-select" name="item_start_m[]">${monOpts}</select>
+        <strong>đến</strong>
+        <select class="form-select" name="item_end_d[]">${dayOpts}</select>
+        <select class="form-select" name="item_end_m[]">${monOpts}</select>
+      </div>
+      <div class="mt-2">
+        <select class="form-select" name="item_statuses[]">
+          <option value="Chưa hoàn thành" selected>Chưa hoàn thành</option>
+          <option value="Đang thực hiện">Đang thực hiện</option>
+          <option value="Đã hoàn thành">Đã hoàn thành</option>
+          <option value="Chuyển kỳ sau">Chuyển kỳ sau</option>
+        </select>
+      </div>
+    </div>
+    <div class="kl-act">
+      <button type="button" class="btn btn-outline-danger" onclick="this.closest('.kl-row').remove()">–</button>
+    </div>`;
+  wr.appendChild(row);
+}
+<script>
+(function () {
+  "use strict";
+
+  function isPlansPage() {
+    return window.location.pathname.indexOf("/plans") === 0;
+  }
+
+  function shouldReloadPlansPage(payload) {
+    if (!payload || payload.module !== "plans") {
+      return false;
+    }
+    return ["plan_created", "plan_updated", "plan_deleted"].indexOf(payload.type) !== -1;
+  }
+
+  function reloadPlansPage() {
+    if (!isPlansPage()) {
+      return;
+    }
+    window.location.reload();
+  }
+
+  window.addEventListener("hvgl:notify", function (event) {
+    var payload = (event && event.detail) || {};
+    if (!shouldReloadPlansPage(payload)) {
+      return;
+    }
+    reloadPlansPage();
+  });
+})();
+</script>
+
+{% endblock %}

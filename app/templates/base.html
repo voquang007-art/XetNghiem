@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ app_name }}</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="app-shell">
+<header class="header">
+  <div class="brand">
+    <img src="/static/images/logo.png" class="logo" alt="Logo">
+    <div class="brand-text">
+      <div class="brand-line1">{{ company_name }}</div>
+      <div class="brand-line2">{{ app_name }}</div>
+    </div>
+  </div>
+  <nav class="nav nav-medical">
+  <a href="/dashboard" class="{% if request.url.path == '/dashboard' %}is-active{% endif %}" {% if request.url.path == '/dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
+  <a href="/plans" class="{% if request.url.path.startswith('/plans') %}is-active{% endif %}" {% if request.url.path.startswith('/plans') %}aria-current="page"{% endif %}>Công việc thường xuyên</a>
+
+  {# ==== CHUẨN HOÁ ROLES TỪ SESSION (có thể là list hoặc string) ==== #}
+  {% set roles0 = request.session.get('roles') %}
+  {% if roles0 is string %}
+    {% set roles_flat = '|' + roles0.replace(';','|').replace(',','|').replace(' ','') + '|' %}
+    {% set roles = roles0.replace(';',',').replace('|',',').split(',') %}
+  {% else %}
+    {% set roles = roles0 or [] %}
+    {% set roles_flat = '|' + (roles | join('|')) + '|' %}
+    {% set roles_flat = roles_flat.replace(' ','') %}
+  {% endif %}
+
+  {% set is_admin = request.session.get('is_admin') %}
+  {% set is_admin_or_leader = request.session.get('is_admin_or_leader') %}
+
+  {% set is_admin_role = ('|ROLE_ADMIN|' in roles_flat) or is_admin %}
+
+  {% set is_board =
+      ('|ROLE_LANH_DAO|' in roles_flat)
+      or ('|ROLE_HOI_DONG_THANH_VIEN|' in roles_flat)
+  %}
+
+  {% set is_bgd = ('|ROLE_BGD|' in roles_flat) %}
+
+  {% set is_khoa_manager =
+      ('|ROLE_TRUONG_KHOA|' in roles_flat)
+      or ('|ROLE_PHO_TRUONG_KHOA|' in roles_flat)
+  %}
+
+  {% set is_ktv_truong = ('|ROLE_KY_THUAT_VIEN_TRUONG|' in roles_flat) %}
+
+  {% set is_functional_manager =
+      ('|ROLE_QL_CHAT_LUONG|' in roles_flat)
+      or ('|ROLE_QL_KY_THUAT|' in roles_flat)
+      or ('|ROLE_QL_AN_TOAN|' in roles_flat)
+  %}
+
+  {% set is_operations_manager =
+      ('|ROLE_QL_VAT_TU|' in roles_flat)
+      or ('|ROLE_QL_TRANG_THIET_BI|' in roles_flat)
+      or ('|ROLE_QL_MOI_TRUONG|' in roles_flat)
+      or ('|ROLE_QL_CNTT|' in roles_flat)
+      or ('|ROLE_QL_CONG_VIEC|' in roles_flat)
+  %}
+
+  {% set is_group_lead =
+      ('|ROLE_TRUONG_NHOM|' in roles_flat)
+      or ('|ROLE_PHO_NHOM|' in roles_flat)
+      or ('|ROLE_TO_TRUONG|' in roles_flat)
+      or ('|ROLE_PHO_TO|' in roles_flat)
+  %}
+
+  {% set is_manager =
+      is_bgd
+      or is_khoa_manager
+      or is_ktv_truong
+      or is_functional_manager
+      or is_operations_manager
+      or is_group_lead
+  %}
+
+  {% set is_plan_khoa_manager = is_khoa_manager or is_ktv_truong %}
+  {% set is_plan_functional_manager = is_functional_manager %}
+  {% set is_plan_operations_manager = is_operations_manager %}
+  {% set is_plan_group_lead = is_group_lead %}
+  {% set is_plan_staff = is_nv %}
+  {% set is_nv = ('|ROLE_NHAN_VIEN|' in roles_flat) %}
+
+  {% set is_hdtv_only = is_board and (not is_admin_role) %}
+  {% set is_files_hidden = is_board or is_bgd %}
+
+  {% if is_admin_role or is_board or is_manager %}
+    <a href="/tasks" class="{% if request.url.path.startswith('/tasks') %}is-active{% endif %}" {% if request.url.path.startswith('/tasks') %}aria-current="page"{% endif %}>Giao thêm việc</a>
+  {% endif %}
+
+  {% if (not is_admin_role) and (not is_board) and (is_manager or is_nv) %}
+    <a href="/inbox" class="{% if request.url.path.startswith('/inbox') %}is-active{% endif %}" {% if request.url.path.startswith('/inbox') %}aria-current="page"{% endif %}>Nhận thêm việc</a>
+  {% endif %}
+
+  <a href="/chat" class="{% if request.url.path.startswith('/chat') %}is-active{% endif %}" {% if request.url.path.startswith('/chat') %}aria-current="page"{% endif %}>Trao đổi nội bộ</a>
+
+  <a href="/meetings" class="{% if request.url.path.startswith('/meetings') %}is-active{% endif %}" {% if request.url.path.startswith('/meetings') %}aria-current="page"{% endif %}>Họp trực tuyến</a>  
+  <a href="/units" class="{% if request.url.path.startswith('/units') %}is-active{% endif %}" {% if request.url.path.startswith('/units') %}aria-current="page"{% endif %}>Cơ cấu</a>
+  {% if not is_files_hidden %}
+    <a href="/files" class="{% if request.url.path.startswith('/files') %}is-active{% endif %}" {% if request.url.path.startswith('/files') %}aria-current="page"{% endif %}>Tài liệu</a>
+  {% endif %}
+  <a href="/draft-approvals" class="{% if request.url.path.startswith('/draft-approvals') %}is-active{% endif %}" {% if request.url.path.startswith('/draft-approvals') %}aria-current="page"{% endif %}>Phê duyệt dự thảo</a>
+  <a href="/leave-schedule" class="{% if request.url.path.startswith('/leave-schedule') %}is-active{% endif %}" {% if request.url.path.startswith('/leave-schedule') %}aria-current="page"{% endif %}>Nghỉ phép - Phân trực</a>
+
+  {% if (is_admin_or_leader or is_admin or ('|ROLE_ADMIN|' in roles_flat) or ('|ROLE_LANH_DAO|' in roles_flat)) and (not is_hdtv_only) %}
+  <a href="/account/users" class="{% if request.url.path.startswith('/account/users') %}is-active{% endif %}" {% if request.url.path.startswith('/account/users') %}aria-current="page"{% endif %}>Quản trị người dùng</a>
+  <a href="/account/secrets" class="{% if request.url.path.startswith('/account/secrets') %}is-active{% endif %}" {% if request.url.path.startswith('/account/secrets') %}aria-current="page"{% endif %}>Quản lý khóa &amp; PIN</a>
+  {% endif %}
+
+  <a href="/account" class="{% if request.url.path == '/account' %}is-active{% endif %}" {% if request.url.path == '/account' %}aria-current="page"{% endif %}>Tài khoản</a>
+  <a href="/logout">Đăng xuất</a>
+</nav>
+</header>
+<main class="container">
+  {% block content %}{% endblock %}
+</main>
+<footer class="footer">
+  Ứng dụng được phát triển bởi <i>Võ Như Minh Quang</i>
+</footer>
+<script src="/static/chat/chat.js"></script>
+</body>
+</html>

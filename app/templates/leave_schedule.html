@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .leave-tabs { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+  .leave-tab {
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:170px; padding:10px 14px; border-radius:10px;
+    text-decoration:none; font-weight:700; border:1px solid #cbd5e1;
+    background:#fff; color:#0f172a;
+  }
+  .leave-tab.is-active { background:#0b4f9c; color:#fff; border-color:#0b4f9c; }
+  .leave-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
+  .balance-card {
+    border:1px solid #dbe4ee; border-radius:12px; padding:12px; background:#fff;
+    box-shadow:0 1px 3px rgba(15, 23, 42, 0.06);
+  }
+  .balance-card .code {
+    display:inline-block; min-width:44px; text-align:center; padding:4px 10px; border-radius:999px;
+    background:#e0f2fe; color:#0c4a6e; font-weight:700; margin-bottom:8px;
+  }
+  .balance-card .title { font-weight:700; color:#0f172a; margin-bottom:6px; }
+  .balance-card .figure { font-size:22px; font-weight:800; color:#0b4f9c; margin-bottom:4px; }
+  .muted-note { color:#64748b; font-size:13px; }
+  .alert-box {
+    padding:12px 14px; border-radius:10px; margin-bottom:12px; font-weight:600;
+  }
+  .alert-success { background:#ecfdf5; color:#166534; border:1px solid #bbf7d0; }
+  .alert-error { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
+  .toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
+  .toolbar .btn, .action-btn {
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    border:none; border-radius:8px; padding:9px 14px; cursor:pointer; text-decoration:none;
+    font-weight:700;
+  }
+  .btn-primary { background:#0b4f9c; color:#fff; }
+  .btn-secondary { background:#e2e8f0; color:#0f172a; }
+  .btn-warning { background:#b45309; color:#fff; }
+  .btn-success { background:#166534; color:#fff; }
+  .btn-danger { background:#b91c1c; color:#fff; }
+  .section-title { margin:0 0 10px 0; font-size:20px; font-weight:800; color:#0f172a; }
+  .section-subtitle { margin:0 0 14px 0; color:#475569; }
+  .form-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; }
+  .form-grid .full { grid-column:1 / -1; }
+  .field label { display:block; margin-bottom:6px; font-weight:700; color:#0f172a; }
+  .field input, .field select, .field textarea {
+    width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px;
+    box-sizing:border-box; background:#fff;
+  }
+  .field textarea { min-height:90px; resize:vertical; }
+  .info-list { margin:0; padding-left:18px; color:#334155; }
+  .info-list li { margin-bottom:6px; }
+  .table-wrap { overflow:auto; }
+  .table { width:100%; border-collapse:collapse; }
+  .table th, .table td { border:1px solid #dbe4ee; padding:9px 10px; vertical-align:top; }
+  .table th { background:#eff6ff; color:#0f172a; text-align:left; }
+  .tag-status {
+    display:inline-block; border-radius:999px; padding:4px 10px; font-size:12px; font-weight:700;
+  }
+  .tag-pending { background:#fef3c7; color:#92400e; }
+  .tag-approved { background:#dcfce7; color:#166534; }
+  .tag-cancelled { background:#fee2e2; color:#991b1b; }
+  .placeholder-box {
+    border:1px dashed #94a3b8; border-radius:12px; padding:18px; background:#f8fafc; color:#334155;
+  }
+  @media (max-width: 840px) {
+    .form-grid { grid-template-columns:1fr; }
+  }
+</style>
+
+<div class="leave-tabs">
+  <a href="/leave-schedule?tab=leave" class="leave-tab {% if current_tab == 'leave' %}is-active{% endif %}">Tab 1: Đăng ký nghỉ</a>
+  <a href="/leave-schedule?tab=roster" class="leave-tab {% if current_tab == 'roster' %}is-active{% endif %}">Tab 2: Phân trực</a>
+</div>
+
+{% if message %}
+  <div class="alert-box alert-success">{{ message }}</div>
+{% endif %}
+{% if error %}
+  <div class="alert-box alert-error">{{ error }}</div>
+{% endif %}
+
+{% if current_tab == 'leave' %}
+  <div class="card">
+    <h2 class="section-title">Nghỉ phép - Phân trực / Tab 1: Đăng ký nghỉ</h2>
+    <p class="section-subtitle">
+      Nhóm áp dụng hiện tại của tài khoản: <strong>{{ group_label }}</strong>
+      {% if primary_unit_name %} - Đơn vị chính: <strong>{{ primary_unit_name }}</strong>{% endif %}
+    </p>
+
+    <div class="leave-grid">
+      {% for item in balances %}
+      <div class="balance-card">
+        <div class="code">{{ item.code }}</div>
+        <div class="title">{{ item.label }}</div>
+        {% if item.max is not none %}
+          <div class="figure">{{ item.used }} / {{ item.max }}</div>
+        {% else %}
+          <div class="figure">Không giới hạn</div>
+        {% endif %}
+        <div class="muted-note">{{ item.note }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px;">
+    <h3 class="section-title">Nguyên tắc đang áp dụng</h3>
+    <ul class="info-list">
+      <li><strong>F</strong>: Nghỉ phép năm - mặc định 12 ngày làm việc/năm; chỉ Admin được cộng thêm ngày.</li>
+      <li><strong>P</strong>: Nghỉ phép tháng - tối đa 4 ngày công/tháng/người.</li>
+      <li><strong>NL</strong>: Nghỉ lễ, tết - mức cấu hình hiện tại 12 ngày/năm.</li>
+      <li><strong>H</strong>: Đi học. <strong>CT</strong>: Đi công tác.</li>
+      <li>Trong cùng nhóm, nếu một ngày đã có người đăng ký nghỉ thì hệ thống khóa các đăng ký khác trùng ngày.</li>
+      <li>Nhóm Trưởng khoa / Phó khoa / Kỹ thuật viên trưởng được gom chung một nhóm; không được nghỉ trùng nhau.</li>
+      <li>Hết hạn đăng ký trong tháng: tháng 31 ngày khóa sau ngày 26; tháng 30 ngày khóa sau ngày 25; tháng 2 khóa sau ngày 23. Sau mốc này chỉ Trưởng khoa, Phó khoa, Kỹ thuật viên trưởng hoặc Admin mới được điều chỉnh.</li>
+      <li>Phê duyệt áp dụng cho Trưởng khoa và Phó khoa; khi một trong hai người đã phê duyệt thì người còn lại không còn quyền duyệt phiếu đó nữa.</li>
+    </ul>
+  </div>
+
+  <div class="card" style="margin-top:14px;">
+    <div class="toolbar">
+      <a href="/leave-schedule?tab=leave&list_mode=all" class="btn btn-secondary">Tất cả</a>
+      <a href="/leave-schedule?tab=leave&list_mode=pending" class="btn btn-secondary">Chờ duyệt</a>
+      <a href="/leave-schedule?tab=leave&list_mode=approved" class="btn btn-secondary">Đã duyệt</a>
+      <a href="/leave-schedule/export?month={{ current_month }}" class="btn btn-primary">Xuất Excel tháng {{ current_month }}</a>
+    </div>
+
+    {% if can_submit %}
+    <form method="post" action="/leave-schedule/add">
+      <div class="form-grid">
+        <div class="field">
+          <label for="leave_type">Loại nghỉ</label>
+          <select name="leave_type" id="leave_type" required>
+            <option value="">-- Chọn loại nghỉ --</option>
+            {% for code, meta in leave_type_meta.items() %}
+              <option value="{{ code }}">{{ code }} - {{ meta.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="current_month">Tháng xuất báo cáo</label>
+          <input type="month" id="current_month" name="current_month" value="{{ current_month }}" formnovalidate disabled>
+        </div>
+        <div class="field">
+          <label for="start_date">Từ ngày</label>
+          <input type="date" name="start_date" id="start_date" value="{{ today_str }}" required>
+        </div>
+        <div class="field">
+          <label for="end_date">Đến ngày</label>
+          <input type="date" name="end_date" id="end_date" value="{{ today_str }}" required>
+        </div>
+        <div class="field full">
+          <label for="reason">Lý do</label>
+          <textarea name="reason" id="reason" placeholder="Nhập lý do đăng ký nghỉ"></textarea>
+        </div>
+        <div class="field full">
+          <button type="submit" class="btn btn-primary">Ghi nhận đăng ký nghỉ</button>
+        </div>
+      </div>
+    </form>
+    {% else %}
+      <div class="alert-box alert-error">
+        Đã quá hạn đăng ký trong tháng hiện tại (mốc khóa ngày {{ cutoff_day }}). Tài khoản thường không được tạo mới hoặc điều chỉnh.
+      </div>
+    {% endif %}
+  </div>
+
+  {% if can_admin_adjust %}
+  <div class="card" style="margin-top:14px;">
+    <h3 class="section-title">Admin cộng thêm ngày phép năm</h3>
+    <p class="section-subtitle">Chức năng này chỉ dành cho Admin để mở rộng hạn mức nghỉ phép năm của từng người dùng.</p>
+    <form method="post" action="/leave-schedule/adjust-annual">
+      <div class="form-grid">
+        <div class="field">
+          <label for="user_id">Mã người dùng</label>
+          <input type="text" name="user_id" id="user_id" placeholder="Nhập user_id cần cộng thêm" required>
+        </div>
+        <div class="field">
+          <label for="leave_year">Năm</label>
+          <input type="number" name="leave_year" id="leave_year" value="{{ current_month[:4] }}" required>
+        </div>
+        <div class="field">
+          <label for="extra_days">Số ngày cộng thêm</label>
+          <input type="number" name="extra_days" id="extra_days" min="1" value="1" required>
+        </div>
+        <div class="field full">
+          <label for="adjust_reason">Lý do cộng thêm</label>
+          <textarea name="reason" id="adjust_reason" placeholder="Nhập lý do cộng thêm ngày phép năm"></textarea>
+        </div>
+        <div class="field full">
+          <button type="submit" class="btn btn-warning">Cộng thêm ngày phép năm</button>
+        </div>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+
+  <div class="card" style="margin-top:14px;">
+    <h3 class="section-title">Danh sách đăng ký nghỉ</h3>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Họ tên</th>
+            <th>Nhóm/Bộ phận</th>
+            <th>Loại nghỉ</th>
+            <th>Thời gian</th>
+            <th>Số ngày công</th>
+            <th>Lý do</th>
+            <th>Trạng thái</th>
+            <th>Người duyệt</th>
+            <th>Thao tác</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in requests %}
+          <tr>
+            <td>{{ item.user_name }}</td>
+            <td>{{ item.group_label }}</td>
+            <td>{{ item.symbol }} - {{ item.leave_type_label }}</td>
+            <td>{{ item.start_date }}<br>đến {{ item.end_date }}</td>
+            <td>{{ item.day_count }}</td>
+            <td>{{ item.reason or '-' }}</td>
+            <td>
+              <span class="tag-status {% if item.status == 'APPROVED' %}tag-approved{% elif item.status == 'CANCELLED' %}tag-cancelled{% else %}tag-pending{% endif %}">
+                {{ item.status_label }}
+              </span>
+            </td>
+            <td>
+              {% if item.approved_by_name %}
+                {{ item.approved_by_name }}<br><span class="muted-note">{{ item.approved_role or '' }}</span>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td>
+              <div class="toolbar" style="margin:0;">
+                {% if can_approve and item.status == 'PENDING' %}
+                <form method="post" action="/leave-schedule/approve" onsubmit="return confirm('Xác nhận phê duyệt đăng ký nghỉ này?');">
+                  <input type="hidden" name="request_id" value="{{ item.id }}">
+                  <button type="submit" class="action-btn btn-success">Phê duyệt</button>
+                </form>
+                {% endif %}
+
+                {% if item.can_cancel %}
+                <form method="post" action="/leave-schedule/cancel" onsubmit="return confirm('Xác nhận hủy đăng ký nghỉ này?');">
+                  <input type="hidden" name="request_id" value="{{ item.id }}">
+                  <button type="submit" class="action-btn btn-danger">Hủy</button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="9">Chưa có dữ liệu đăng ký nghỉ.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+{% else %}
+  <div class="card">
+    <h2 class="section-title">Nghỉ phép - Phân trực / Tab 2: Phân trực</h2>
+    <div class="placeholder-box">
+      <p><strong>Trạng thái:</strong> đã mở tab hiển thị để chuẩn bị triển khai.</p>
+      <p>Ở bước hiện tại, tab này chỉ hiển thị khung chức năng. Logic phân trực, ràng buộc ca trực và xuất mẫu phân trực sẽ được thực hiện ở bước tiếp theo sau khi chốt xong Tab 1.</p>
+      <ul class="info-list">
+        <li>Dữ liệu đầu vào của tab này sẽ lấy từ các đăng ký nghỉ đã ghi nhận/được duyệt ở Tab 1.</li>
+        <li>Sẽ bổ sung bảng phân ca theo ngày, theo vị trí, theo nhóm.</li>
+        <li>Sẽ bổ sung xuất file Excel theo mẫu phân trực khi có mẫu chuẩn cuối cùng.</li>
+      </ul>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

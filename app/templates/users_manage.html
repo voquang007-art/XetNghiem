@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Quản trị người dùng</h2>
+  <p>Chỉ Admin/Lãnh đạo được thao tác.</p>
+
+  <script>
+    function confirmAndDisable(btn, msg) {
+      if (!confirm(msg)) return false;
+      btn.disabled = true;
+      btn.closest("form").submit();
+      return false;
+    }
+  </script>
+
+  <!-- ========== ĐANG HOẠT ĐỘNG ========== -->
+  <h3 style="margin-top:16px;">Đang hoạt động</h3>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Họ tên</th>
+        <th>Tên đăng nhập</th>
+        <th>Email</th>
+        <th>Điện thoại</th>
+        <th>Vị trí hiện tại</th>
+        <th>Đơn vị hiện tại</th>
+        <th>Hành động</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in actives %}
+      <tr>
+        <td>{{ u.full_name or "-" }}</td>
+        <td>{{ u.username }}</td>
+        <td>{{ u.email or "-" }}</td>
+        <td>{{ u.phone or "-" }}</td>
+        <td>{{ u.current_position_label or "-" }}</td>
+        <td>{{ u.current_unit_name or "-" }}</td>
+        <td>
+          <a href="/account/users/edit?user_id={{ u.id }}" class="button">Sửa</a>
+
+          <form method="post" action="/account/users/lock" style="display:inline; margin-left:6px;">
+            <input type="hidden" name="user_id" value="{{ u.id }}">
+            <button type="submit" style="background:#DC2626;"
+              onclick="return confirmAndDisable(this,'Khoá tài khoản này?')">Khoá</button>
+          </form>
+
+          <form method="post" action="/account/users/delete" style="display:inline; margin-left:6px;">
+            <input type="hidden" name="user_id" value="{{ u.id }}">
+            <button type="submit" style="background:#6B7280;"
+              onclick="return confirmAndDisable(this,'Xoá tài khoản này? Hành động không thể hoàn tác!')">Xóa</button>
+          </form>
+
+          <form method="post" action="/account/users/position" style="display:block; margin-top:6px;">
+            <input type="hidden" name="user_id" value="{{ u.id }}">
+            <select name="new_role" required>
+              <option value="LANH_DAO" {% if u.current_position_key == "LANH_DAO" %}selected{% endif %}>HĐTV</option>
+              <option value="BGD" {% if u.current_position_key == "BGD" %}selected{% endif %}>BGĐ</option>
+              <option value="TRUONG_KHOA" {% if u.current_position_key == "TRUONG_KHOA" %}selected{% endif %}>Trưởng khoa</option>
+              <option value="PHO_TRUONG_KHOA" {% if u.current_position_key == "PHO_TRUONG_KHOA" %}selected{% endif %}>Phó khoa</option>
+              <option value="KY_THUAT_VIEN_TRUONG" {% if u.current_position_key == "KY_THUAT_VIEN_TRUONG" %}selected{% endif %}>Kỹ thuật viên trưởng</option>
+              <option value="QL_CHAT_LUONG" {% if u.current_position_key == "QL_CHAT_LUONG" %}selected{% endif %}>Quản lý chất lượng</option>
+              <option value="QL_KY_THUAT" {% if u.current_position_key == "QL_KY_THUAT" %}selected{% endif %}>Quản lý kỹ thuật</option>
+              <option value="QL_AN_TOAN" {% if u.current_position_key == "QL_AN_TOAN" %}selected{% endif %}>Quản lý an toàn</option>
+              <option value="QL_VAT_TU" {% if u.current_position_key == "QL_VAT_TU" %}selected{% endif %}>Quản lý vật tư</option>
+              <option value="QL_TRANG_THIET_BI" {% if u.current_position_key == "QL_TRANG_THIET_BI" %}selected{% endif %}>Quản lý trang thiết bị</option>
+              <option value="QL_MOI_TRUONG" {% if u.current_position_key == "QL_MOI_TRUONG" %}selected{% endif %}>Quản lý môi trường</option>
+              <option value="QL_CNTT" {% if u.current_position_key == "QL_CNTT" %}selected{% endif %}>Quản lý CNTT</option>
+              <option value="TRUONG_NHOM" {% if u.current_position_key == "TRUONG_NHOM" %}selected{% endif %}>Nhóm/Tổ trưởng</option>
+              <option value="PHO_NHOM" {% if u.current_position_key == "PHO_NHOM" %}selected{% endif %}>Nhóm/Tổ phó</option>
+              <option value="NHAN_VIEN" {% if u.current_position_key == "NHAN_VIEN" %}selected{% endif %}>Nhân viên</option>
+            </select>
+            <button type="submit" onclick="return confirmAndDisable(this,'Cập nhật vị trí người dùng?')">Cập nhật vị trí</button>
+          </form>
+
+          <form method="post" action="/account/users/unit-transfer" style="display:block; margin-top:6px;">
+            <input type="hidden" name="user_id" value="{{ u.id }}">
+            {% if all_units %}
+              <select name="new_unit_id" required>
+                {% for un in all_units %}
+                  <option value="{{ un.id }}" {% if u.current_unit_id == un.id %}selected{% endif %}>
+                    {{ un.ten_don_vi }} (cấp {{ un.cap_do }})
+                  </option>
+                {% endfor %}
+              </select>
+            {% else %}
+              <span style="color:#6B7280;">Chưa có dữ liệu đơn vị</span>
+            {% endif %}
+            <button type="submit" onclick="return confirmAndDisable(this,'Điều chuyển đơn vị cho người dùng?')">Điều chuyển đơn vị</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      {% if actives|length == 0 %}
+      <tr><td colspan="7" style="text-align:center;color:#6B7280;">Không có tài khoản đang hoạt động</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+  <!-- ========== ĐÃ KHOÁ ========== -->
+  <h3 style="margin-top:16px;">Đã khoá</h3>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Họ tên</th>
+        <th>Tên đăng nhập</th>
+        <th>Email</th>
+        <th>Điện thoại</th>
+        <th>Vị trí hiện tại</th>
+        <th>Đơn vị hiện tại</th>
+        <th>Hành động</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in locked %}
+      <tr>
+        <td>{{ u.full_name or "-" }}</td>
+        <td>{{ u.username }}</td>
+        <td>{{ u.email or "-" }}</td>
+        <td>{{ u.phone or "-" }}</td>
+        <td>{{ u.current_position_label or "-" }}</td>
+        <td>{{ u.current_unit_name or "-" }}</td>
+        <td>
+          <a href="/account/users/edit?user_id={{ u.id }}" class="button">Sửa</a>
+
+          <form method="post" action="/account/users/unlock" style="display:inline; margin-left:6px;">
+            <input type="hidden" name="user_id" value="{{ u.id }}">
+            <button type="submit" onclick="return confirmAndDisable(this,'Mở khoá tài khoản này?')">Mở</button>
+          </form>
+
+          <form method="post" action="/account/users/delete" style="display:inline; margin-left:6px;">
+            <input type="hidden" name="user_id" value="{{ u.id }}">
+            <button type="submit" style="background:#6B7280;"
+              onclick="return confirmAndDisable(this,'Xoá tài khoản này? Hành động không thể hoàn tác!')">Xóa</button>
+          </form>
+
+          <form method="post" action="/account/users/position" style="display:block; margin-top:6px;">
+            <input type="hidden" name="user_id" value="{{ u.id }}">
+            <select name="new_role" required>
+              <option value="LANH_DAO" {% if u.current_position_key == "LANH_DAO" %}selected{% endif %}>HĐTV</option>
+              <option value="BGD" {% if u.current_position_key == "BGD" %}selected{% endif %}>BGĐ</option>
+              <option value="TRUONG_KHOA" {% if u.current_position_key == "TRUONG_KHOA" %}selected{% endif %}>Trưởng khoa</option>
+              <option value="PHO_TRUONG_KHOA" {% if u.current_position_key == "PHO_TRUONG_KHOA" %}selected{% endif %}>Phó khoa</option>
+              <option value="KY_THUAT_VIEN_TRUONG" {% if u.current_position_key == "KY_THUAT_VIEN_TRUONG" %}selected{% endif %}>Kỹ thuật viên trưởng</option>
+              <option value="QL_CHAT_LUONG" {% if u.current_position_key == "QL_CHAT_LUONG" %}selected{% endif %}>Quản lý chất lượng</option>
+              <option value="QL_KY_THUAT" {% if u.current_position_key == "QL_KY_THUAT" %}selected{% endif %}>Quản lý kỹ thuật</option>
+              <option value="QL_AN_TOAN" {% if u.current_position_key == "QL_AN_TOAN" %}selected{% endif %}>Quản lý an toàn</option>
+              <option value="QL_VAT_TU" {% if u.current_position_key == "QL_VAT_TU" %}selected{% endif %}>Quản lý vật tư</option>
+              <option value="QL_TRANG_THIET_BI" {% if u.current_position_key == "QL_TRANG_THIET_BI" %}selected{% endif %}>Quản lý trang thiết bị</option>
+              <option value="QL_MOI_TRUONG" {% if u.current_position_key == "QL_MOI_TRUONG" %}selected{% endif %}>Quản lý môi trường</option>
+              <option value="QL_CNTT" {% if u.current_position_key == "QL_CNTT" %}selected{% endif %}>Quản lý CNTT</option>
+              <option value="TRUONG_NHOM" {% if u.current_position_key == "TRUONG_NHOM" %}selected{% endif %}>Nhóm/Tổ trưởng</option>
+              <option value="PHO_NHOM" {% if u.current_position_key == "PHO_NHOM" %}selected{% endif %}>Nhóm/Tổ phó</option>
+              <option value="NHAN_VIEN" {% if u.current_position_key == "NHAN_VIEN" %}selected{% endif %}>Nhân viên</option>
+            </select>
+            <button type="submit" onclick="return confirmAndDisable(this,'Cập nhật vị trí người dùng?')">Cập nhật vị trí</button>
+          </form>
+
+          <form method="post" action="/account/users/unit-transfer" style="display:block; margin-top:6px;">
+            <input type="hidden" name="user_id" value="{{ u.id }}">
+            {% if all_units %}
+              <select name="new_unit_id" required>
+                {% for un in all_units %}
+                  <option value="{{ un.id }}" {% if u.current_unit_id == un.id %}selected{% endif %}>
+                    {{ un.ten_don_vi }} (cấp {{ un.cap_do }})
+                  </option>
+                {% endfor %}
+              </select>
+            {% else %}
+              <span style="color:#6B7280;">Chưa có dữ liệu đơn vị</span>
+            {% endif %}
+            <button type="submit" onclick="return confirmAndDisable(this,'Điều chuyển đơn vị cho người dùng?')">Điều chuyển đơn vị</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      {% if locked|length == 0 %}
+      <tr><td colspan="7" style="text-align:center;color:#6B7280;">Không có tài khoản bị khoá</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

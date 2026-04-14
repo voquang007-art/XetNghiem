@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Cơ cấu đơn vị xét nghiệm</h2>
+
+  {% if can_manage %}
+    <form method="post" action="/units/create" class="row">
+      <div>
+        <label>Tên đơn vị</label>
+        <input type="text" name="ten_don_vi" required>
+      </div>
+
+      <div>
+        <label>Cấp độ</label>
+        <select name="cap_do" id="cap_do" required>
+          <option value="3" selected>Nhóm/Tổ</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Đơn vị cha</label>
+        <select name="parent_id" id="parent_id" required>
+          {% if lab_unit %}
+            <option value="{{ lab_unit.id }}" selected>{{ lab_unit.ten_don_vi }}</option>
+          {% else %}
+            <option value="">Chưa cấu hình Khoa Xét nghiệm</option>
+          {% endif %}
+        </select>
+      </div>
+
+      <button type="submit" {% if not lab_unit %}disabled{% endif %}>Thêm</button>
+    </form>
+  {% else %}
+    <div class="row">
+      <div>
+        <label>Đơn vị hiện tại</label>
+        <input type="text" value="{{ current_unit_name or '' }}" disabled>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if can_manage %}
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Tên đơn vị</th>
+          <th>Loại</th>
+          <th>Đơn vị cha</th>
+          <th>Path</th>
+          <th>Trạng thái</th>
+          <th>Đổi tên</th>
+          <th>Thu hồi</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for u in units %}
+        <tr>
+          <td>{{ u.id }}</td>
+          <td>{{ u.ten_don_vi }}</td>
+          <td>{{ u.unit_type_label }}</td>
+          <td>
+            {% if u.parent_name %}
+              {{ u.parent_name }}
+            {% else %}
+              -
+            {% endif %}
+          </td>
+          <td>{{ u.path }}</td>
+          <td>{{ u.trang_thai }}</td>
+
+          <td>
+            <form method="post" action="/units/rename">
+              <input type="hidden" name="unit_id" value="{{ u.id }}">
+              <input type="text" name="ten_don_vi_moi" placeholder="Tên mới">
+              <button>Đổi</button>
+            </form>
+          </td>
+
+          <td>
+            <form method="post" action="/units/retire">
+              <input type="hidden" name="unit_id" value="{{ u.id }}">
+              <input type="text" name="reason" placeholder="Lý do">
+              <button>Thu hồi</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Tên đơn vị hiện tại</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% if units %}
+        {% for u in units %}
+          <tr>
+            <td>{{ u.ten_don_vi }}</td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td>Chưa xác định được đơn vị hiện tại.</td>
+        </tr>
+      {% endif %}
+      </tbody>
+    </table>
+  {% endif %}
+</div>
+{% endblock %}
