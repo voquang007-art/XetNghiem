@@ -3,10 +3,10 @@
 
 <div class="container mt-3 plans-page">
   <div class="d-flex justify-content-between align-items-center mb-3 page-head">
-    <h3 class="page-title"><i class="fas fa-calendar-alt"></i> Quản lý Kế hoạch</h3>
+    <h3 class="page-title"><i class="fas fa-calendar-alt"></i> QUẢN LÝ KẾ HOẠCH THỰC HIỆN CÔNG VIỆC THƯỜNG XUYÊN</h3>
     {% if allowed_creator_kinds and (allowed_creator_kinds|length > 0) %}
       <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addPlanModal">
-        <i class="fas fa-plus"></i> Tạo Kế hoạch mới
+        <i class="fas fa-plus"></i> Xem Kế hoạch thực hiện công việc thường xuyên
       </button>
     {% endif %}
   </div>
@@ -262,14 +262,16 @@
                   <td>
                     {% if _is_owner %}
                       <select class="form-select form-select-sm" name="item_statuses[]">
-                        <option value="Chưa hoàn thành" {% if it._status_label == 'Chưa hoàn thành' %}selected{% endif %}>Chưa hoàn thành</option>
+                        <option value="Chưa thực hiện" {% if it._status_label == 'Chưa thực hiện' %}selected{% endif %}>Chưa thực hiện</option>
+                        <option value="Mới triển khai bước đầu" {% if it._status_label == 'Mới triển khai bước đầu' %}selected{% endif %}>Mới triển khai bước đầu</option>
                         <option value="Đang thực hiện" {% if it._status_label == 'Đang thực hiện' %}selected{% endif %}>Đang thực hiện</option>
                         <option value="Đã hoàn thành" {% if it._status_label == 'Đã hoàn thành' %}selected{% endif %}>Đã hoàn thành</option>
                         <option value="Chuyển kỳ sau" {% if it._status_label == 'Chuyển kỳ sau' %}selected{% endif %}>Chuyển kỳ sau</option>
                       </select>
                     {% else %}
                       <select class="form-select form-select-sm" disabled>
-                        <option {% if it._status_label == 'Chưa hoàn thành' %}selected{% endif %}>Chưa hoàn thành</option>
+                        <option {% if it._status_label == 'Chưa thực hiện' %}selected{% endif %}>Chưa thực hiện</option>
+                        <option {% if it._status_label == 'Mới triển khai bước đầu' %}selected{% endif %}>Mới triển khai bước đầu</option>
                         <option {% if it._status_label == 'Đang thực hiện' %}selected{% endif %}>Đang thực hiện</option>
                         <option {% if it._status_label == 'Đã hoàn thành' %}selected{% endif %}>Đã hoàn thành</option>
                         <option {% if it._status_label == 'Chuyển kỳ sau' %}selected{% endif %}>Chuyển kỳ sau</option>
@@ -309,8 +311,12 @@
 <div class="modal fade" id="addPlanModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg"><div class="modal-content">
     <form action="{{ url_for('add_plan') }}" method="post">
-      <div class="modal-header">
-        <h5 class="modal-title">Tạo kế hoạch mới</h5>
+      <div class="modal-header plan-modal-head">
+        <div class="plan-modal-title-wrap">
+          <span class="btn btn-primary plan-modal-title-btn">
+            <i class="fas fa-plus"></i> Tạo kế hoạch thực hiện công việc thường xuyên
+          </span>
+        </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
@@ -487,6 +493,28 @@
   color:#334155;
   font-weight:700;
 }
+
+.plans-page .btn-primary{
+  color:#FFFFFF !important;
+  background:linear-gradient(135deg,#B8860B 0%,#996F00 100%) !important;
+  border-color:#7A5900 !important;
+  box-shadow:0 4px 12px rgba(153,111,0,.28);
+}
+
+.plans-page .btn-primary:hover,
+.plans-page .btn-primary:focus,
+.plans-page .btn-primary:active{
+  color:#FFFFFF !important;
+  background:linear-gradient(135deg,#996F00 0%,#7A5900 100%) !important;
+  border-color:#5E4300 !important;
+}
+
+.plans-page .plan-modal-title-btn{
+  color:#FFFFFF !important;
+  background:linear-gradient(135deg,#B8860B 0%,#996F00 100%) !important;
+  border-color:#7A5900 !important;
+}
+
 .plans-page .btn-info{
   color:#FFFFFF;
   background:linear-gradient(135deg,#0E7490 0%,#1D6FA5 100%);
@@ -582,7 +610,8 @@
               </div>
               <div class="mt-2">
                 <select class="form-select" name="item_statuses[]">
-                  <option value="Chưa hoàn thành" selected>Chưa hoàn thành</option>
+                  <option value="Chưa thực hiện" selected>Chưa thực hiện</option>
+                  <option value="Mới triển khai bước đầu">Mới triển khai bước đầu</option>
                   <option value="Đang thực hiện">Đang thực hiện</option>
                   <option value="Đã hoàn thành">Đã hoàn thành</option>
                   <option value="Chuyển kỳ sau">Chuyển kỳ sau</option>
@@ -590,13 +619,9 @@
               </div>
             </div>
 
-            <div class="kl-act">
-              <button type="button" class="btn btn-outline-secondary" onclick="addItemRow()">+</button>
-            </div>
-          </div>
 
             <div class="kl-act">
-              <button type="button" class="btn btn-outline-secondary" onclick="addItemRow()">+</button>
+              <button type="button" class="btn btn-outline-secondary" onclick="addItemRow()">Thêm nội dung công việc</button>
             </div>
           </div>
         </div>
@@ -643,6 +668,7 @@ function addItemRow(){
   const monOpts = (()=>{ let s=''; for(let m=1; m<=12; m++){ const mm=(m<10?('0'+m):m); s+=`<option value="${mm}">${m}</option>`;} return s; })();
 
   const row = document.createElement('div');
+  row.className = 'kl-row mb-2';
   row.innerHTML = `
     <div class="kl-no"><input type="text" class="form-control" value="${idx}" disabled></div>
     <div class="kl-wide"><input type="text" class="form-control" name="item_contents[]" placeholder="Nội dung công việc"></div>
@@ -658,7 +684,8 @@ function addItemRow(){
       </div>
       <div class="mt-2">
         <select class="form-select" name="item_statuses[]">
-          <option value="Chưa hoàn thành" selected>Chưa hoàn thành</option>
+          <option value="Chưa thực hiện" selected>Chưa thực hiện</option>
+          <option value="Mới triển khai bước đầu">Mới triển khai bước đầu</option>
           <option value="Đang thực hiện">Đang thực hiện</option>
           <option value="Đã hoàn thành">Đã hoàn thành</option>
           <option value="Chuyển kỳ sau">Chuyển kỳ sau</option>
@@ -666,10 +693,11 @@ function addItemRow(){
       </div>
     </div>
     <div class="kl-act">
-      <button type="button" class="btn btn-outline-danger" onclick="this.closest('.kl-row').remove()">–</button>
+      <button type="button" class="btn btn-outline-danger" onclick="this.closest('.kl-row').remove()">Xóa dòng này</button>
     </div>`;
   wr.appendChild(row);
 }
+</script>
 <script>
 (function () {
   "use strict";

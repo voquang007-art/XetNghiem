@@ -310,8 +310,25 @@ class PlanItems(Base):
     __tablename__ = "plan_items"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     plan_id = Column(String, ForeignKey("plans.id"), nullable=False)
+
+    # Nội dung hiển thị
     content = Column(Text, nullable=False)
+
+    # Trường cũ giữ lại để tương thích tạm thời
     due_date = Column(DateTime, nullable=True)
+
+    # ===== BỔ SUNG NỀN DỮ LIỆU KẾ THỪA / CHUYỂN KỲ =====
+    item_code = Column(String, nullable=True, index=True)                # mã công việc bền xuyên kỳ
+    origin_item_id = Column(String, ForeignKey("plan_items.id"), nullable=True)  # dòng gốc đầu tiên
+    carry_forward_from_id = Column(String, ForeignKey("plan_items.id"), nullable=True)  # dòng kỳ trước liền kề
+    is_carried_forward = Column(Boolean, nullable=False, default=False)
+    carry_forward_count = Column(Integer, nullable=False, default=0)
+
+    # ===== TRẠNG THÁI / THỜI GIAN CHUẨN HÓA =====
+    status = Column(String, nullable=True)        # không còn phụ thuộc content để đánh giá
+    start_date = Column(DateTime, nullable=True)
+    end_date = Column(DateTime, nullable=True)
+
     assignee_unit_id = Column(String, ForeignKey("units.id"), nullable=True)
     assignee_user_id = Column(String, ForeignKey("users.id"), nullable=True)
     progress_pct = Column(Integer, default=0)
@@ -322,12 +339,19 @@ class PlanItems(Base):
     plan = relationship("Plans")
     assignee_unit = relationship("Units", foreign_keys=[assignee_unit_id])
     assignee_user = relationship("Users", foreign_keys=[assignee_user_id])
-
+    origin_item = relationship("PlanItems", remote_side=[id], foreign_keys=[origin_item_id])
+    carry_forward_from = relationship("PlanItems", remote_side=[id], foreign_keys=[carry_forward_from_id])
+    
     noi_dung = synonym("content")
     han_hoan_thanh = synonym("due_date")
     don_vi_giao = synonym("assignee_unit_id")
     nguoi_giao = synonym("assignee_user_id")
     ti_le_hoan_thanh = synonym("progress_pct")
+
+    ma_cong_viec = synonym("item_code")
+    trang_thai_thuc_hien = synonym("status")
+    ngay_bat_dau = synonym("start_date")
+    ngay_ket_thuc = synonym("end_date")
 
 # =========================
 # TASKS (Giao việc tuyến dọc)

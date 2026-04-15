@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, and_
 from typing import List, Optional, Dict, Set, Iterable, Any
 import os
+import uuid
 import logging
 import asyncio
 from datetime import datetime
@@ -470,42 +471,86 @@ def _has_plan_visibility_grant(db: Session, user: Users) -> bool:
     modes = _active_visibility_modes(db, user)
     return ("VIEW_ALL" in modes) or ("PLANS_ONLY" in modes)   
 
+_PLAN_ITEM_STATUS_LABELS = [
+    "Chưa thực hiện",
+    "Mới triển khai bước đầu",
+    "Đang thực hiện",
+    "Đã hoàn thành",
+    "Chuyển kỳ sau",
+]
+
+
+def _normalize_item_status(status_txt: Optional[str]) -> str:
+    val = (status_txt or "").strip()
+    if not val:
+        return "Chưa thực hiện"
+    if val == "Chưa hoàn thành":
+        return "Mới triển khai bước đầu"
+    if val not in _PLAN_ITEM_STATUS_LABELS:
+        return "Chưa thực hiện"
+    return val
+
+
 def _pad2(n: Optional[str]) -> Optional[str]:
-    if not n: return None
+    if not n:
+        return None
     s = str(n).strip()
-    if not s.isdigit(): return None
-    return s if len(s) == 2 else ("0"+s)[-2:]
+    if not s.isdigit():
+        return None
+    return s if len(s) == 2 else ("0" + s)[-2:]
+
 
 def _compose_date(y: Optional[str], m: Optional[str], d: Optional[str]) -> Optional[str]:
     y = (y or "").strip()
-    m = _pad2(m); d = _pad2(d)
-    if not (y and m and d): return None
+    m = _pad2(m)
+    d = _pad2(d)
+    if not (y and m and d):
+        return None
     try:
         datetime.strptime(f"{y}-{m}-{d}", "%Y-%m-%d")
         return f"{y}-{m}-{d}"
     except Exception:
         return None
 
+
+def _dt_from_ymd(s: Optional[str]) -> Optional[datetime]:
+    if not s:
+        return None
+    try:
+        return datetime.strptime(str(s).strip(), "%Y-%m-%d")
+    except Exception:
+        return None
+
+
 def _inject_item_tags(content: str, start: Optional[str], end: Optional[str], status_txt: Optional[str]) -> str:
+    st_norm = _normalize_item_status(status_txt)
     parts = []
-    if start: parts.append(f"[[START={start}]]")
-    if end: parts.append(f"[[END={end}]]")
-    if (status_txt or "").strip(): parts.append(f"[[STATUS={(status_txt or '').strip()}]]")
+    if start:
+        parts.append(f"[[START={start}]]")
+    if end:
+        parts.append(f"[[END={end}]]")
+    parts.append(f"[[STATUS={st_norm}]]")
     return ("".join(parts) + " " + (content or "").strip()).strip()
+
 
 def _extract_period_and_status_from_content(content: str, fallback_due: Optional[datetime]) -> (str, str):
     start, end, st = None, None, ""
     try:
         import re
-        m = re.search(r"\[\[START=([0-9]{4}-[0-9]{2}-[0-9]{2})\]\]", content or "");  start = m.group(1) if m else None
-        m = re.search(r"\[\[END=([0-9]{4}-[0-9]{2}-[0-9]{2})\]\]", content or "");    end   = m.group(1) if m else None
-        m = re.search(r"\[\[STATUS=([^\]]+)\]\]", content or "");                     st    = m.group(1).strip() if m else ""
+        m = re.search(r"\[\[START=([0-9]{4}-[0-9]{2}-[0-9]{2})\]\]", content or "")
+        start = m.group(1) if m else None
+        m = re.search(r"\[\[END=([0-9]{4}-[0-9]{2}-[0-9]{2})\]\]", content or "")
+        end = m.group(1) if m else None
+        m = re.search(r"\[\[STATUS=([^\]]+)\]\]", content or "")
+        st = m.group(1).strip() if m else ""
     except Exception:
         pass
 
     def _fmt(d):
-        try: return datetime.strptime(d, "%Y-%m-%d").strftime("%d-%m-%Y")
-        except Exception: return None
+        try:
+            return datetime.strptime(d, "%Y-%m-%d").strftime("%d-%m-%Y")
+        except Exception:
+            return None
 
     if start or end:
         s = _fmt(start) if start else "?"
@@ -514,7 +559,8 @@ def _extract_period_and_status_from_content(content: str, fallback_due: Optional
     else:
         period = fallback_due.strftime("%d-%m-%Y") if fallback_due else "-"
 
-    return period, st
+    return period, _normalize_item_status(st)
+
 
 def _strip_tags_for_display(content: str) -> str:
     try:
@@ -522,6 +568,171 @@ def _strip_tags_for_display(content: str) -> str:
         return re.sub(r"\[\[(START|END|STATUS)=[^\]]+\]\]\s*", "", content or "").strip()
     except Exception:
         return (content or "").strip()
+
+
+def _period_label_from_dates(start_dt: Optional[datetime], end_dt: Optional[datetime], fallback_due: Optional[datetime]) -> str:
+    if start_dt or end_dt:
+        s = start_dt.strftime("%d-%m-%Y") if start_dt else "?"
+        e = end_dt.strftime("%d-%m-%Y") if end_dt else "?"
+        return f"Từ {s} đến {e}"
+    return fallback_due.strftime("%d-%m-%Y") if fallback_due else "-"
+
+
+def _decorate_plan_item_for_view(it: PlanItems) -> None:
+    visible = _strip_tags_for_display(getattr(it, "content", "") or "")
+    it._content_visible = visible if visible else ((getattr(it, "content", "") or "").strip())
+
+    start_dt = getattr(it, "start_date", None)
+    end_dt = getattr(it, "end_date", None)
+    status_val = getattr(it, "status", None)
+
+    if start_dt or end_dt or status_val:
+        it._period_label = _period_label_from_dates(start_dt, end_dt, getattr(it, "due_date", None))
+        it._status_label = _normalize_item_status(status_val)
+        return
+
+    period, st = _extract_period_and_status_from_content(getattr(it, "content", "") or "", getattr(it, "due_date", None))
+    it._period_label = period
+    it._status_label = st
+
+
+def _next_year_month(year: int, month: int) -> (int, int):
+    if int(month) >= 12:
+        return int(year) + 1, 1
+    return int(year), int(month) + 1
+
+
+def _ensure_next_period_plan(db: Session, current_plan: Plans) -> Plans:
+    next_year, next_month = _next_year_month(int(current_plan.year), int(current_plan.month))
+
+    existed = (
+        db.query(Plans)
+        .filter(
+            Plans.unit_id == current_plan.unit_id,
+            Plans.year == next_year,
+            Plans.month == next_month,
+            Plans.plan_kind == current_plan.plan_kind,
+            Plans.created_by == current_plan.created_by,
+            Plans.title == current_plan.title,
+        )
+        .first()
+    )
+    if existed:
+        return existed
+
+    new_plan = Plans(
+        unit_id=current_plan.unit_id,
+        year=next_year,
+        month=next_month,
+        title=current_plan.title,
+        description=current_plan.description,
+        plan_kind=current_plan.plan_kind,
+        status=PlanStatus.DRAFT,
+        created_by=current_plan.created_by,
+        approved_by=None,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(new_plan)
+    db.flush()
+    return new_plan
+
+
+def _delete_auto_carry_forward_item(db: Session, current_plan: Plans, old_item: PlanItems) -> None:
+    if not old_item:
+        return
+
+    next_year, next_month = _next_year_month(int(current_plan.year), int(current_plan.month))
+    next_plan = (
+        db.query(Plans)
+        .filter(
+            Plans.unit_id == current_plan.unit_id,
+            Plans.year == next_year,
+            Plans.month == next_month,
+            Plans.plan_kind == current_plan.plan_kind,
+            Plans.created_by == current_plan.created_by,
+            Plans.title == current_plan.title,
+        )
+        .first()
+    )
+    if not next_plan:
+        return
+
+    row = (
+        db.query(PlanItems)
+        .filter(
+            PlanItems.plan_id == next_plan.id,
+            PlanItems.item_code == getattr(old_item, "item_code", None),
+            PlanItems.is_carried_forward == True,  # noqa
+        )
+        .first()
+    )
+    if row:
+        db.delete(row)
+
+
+def _upsert_carry_forward_item(db: Session, current_plan: Plans, current_item: PlanItems) -> None:
+    if _normalize_item_status(getattr(current_item, "status", None)) != "Chuyển kỳ sau":
+        return
+
+    next_plan = _ensure_next_period_plan(db, current_plan)
+
+    existed = (
+        db.query(PlanItems)
+        .filter(
+            PlanItems.plan_id == next_plan.id,
+            PlanItems.item_code == current_item.item_code,
+            PlanItems.is_carried_forward == True,  # noqa
+        )
+        .first()
+    )
+
+    carry_count = int(getattr(current_item, "carry_forward_count", 0) or 0)
+
+    if existed:
+        existed.content = _inject_item_tags(
+            _strip_tags_for_display(getattr(current_item, "content", "") or ""),
+            None,
+            None,
+            "Chưa thực hiện",
+        )
+        existed.status = "Chưa thực hiện"
+        existed.start_date = None
+        existed.end_date = None
+        existed.due_date = None
+        existed.origin_item_id = getattr(current_item, "origin_item_id", None) or current_item.id
+        existed.carry_forward_from_id = current_item.id
+        existed.is_carried_forward = True
+        existed.carry_forward_count = carry_count
+        existed.updated_at = datetime.utcnow()
+        db.add(existed)
+        return
+
+    new_item = PlanItems(
+        plan_id=next_plan.id,
+        content=_inject_item_tags(
+            _strip_tags_for_display(getattr(current_item, "content", "") or ""),
+            None,
+            None,
+            "Chưa thực hiện",
+        ),
+        due_date=None,
+        item_code=current_item.item_code,
+        origin_item_id=getattr(current_item, "origin_item_id", None) or current_item.id,
+        carry_forward_from_id=current_item.id,
+        is_carried_forward=True,
+        carry_forward_count=carry_count,
+        status="Chưa thực hiện",
+        start_date=None,
+        end_date=None,
+        assignee_unit_id=getattr(current_item, "assignee_unit_id", None),
+        assignee_user_id=getattr(current_item, "assignee_user_id", None),
+        progress_pct=0,
+        note=None,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(new_item)
 
 # ===== Routes =====
 @router.get("")
@@ -621,13 +832,9 @@ def plans_home(request: Request, db: Session = Depends(get_db)):
     for p in plans:
         p._plan_kind_label = _PLAN_KIND_LABELS.get((p.plan_kind or "").strip().upper(), (p.plan_kind or "").strip())       
         p._creator_name = name_map.get(p.created_by, "")
-        items = db.query(PlanItems).filter(PlanItems.plan_id == p.id).all()
+        items = db.query(PlanItems).filter(PlanItems.plan_id == p.id).order_by(PlanItems.created_at.asc(), PlanItems.id.asc()).all()
         for it in items:
-            vis = _strip_tags_for_display(it.content or "")
-            it._content_visible = vis if vis else (it.content or "").strip()
-            period, st = _extract_period_and_status_from_content(it.content or "", getattr(it, "due_date", None))
-            it._period_label = period
-            it._status_label = st
+            _decorate_plan_item_for_view(it)
         setattr(p, "items", items)
 
     create_units: List[Units] = []
@@ -699,13 +906,10 @@ def plan_details(request: Request, plan_id: str, db: Session = Depends(get_db)):
     if not p:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bạn không có quyền xem kế hoạch này.")
 
-    items = db.query(PlanItems).filter(PlanItems.plan_id == plan_id).all()
+    items = db.query(PlanItems).filter(PlanItems.plan_id == plan_id).order_by(PlanItems.created_at.asc(), PlanItems.id.asc()).all()
     for it in items:
-        vis = _strip_tags_for_display(it.content or "")
-        it._content_visible = vis if vis else (it.content or "").strip()
-        period, st = _extract_period_and_status_from_content(it.content or "", getattr(it, "due_date", None))
-        it._period_label = period
-        it._status_label = st
+        _decorate_plan_item_for_view(it)
+        
     p.items = items
 
     p._creator_name = db.query(func.coalesce(Users.full_name, Users.username, "")).filter(Users.id == p.created_by).scalar() or ""
@@ -857,31 +1061,54 @@ def create_plan(
 
     if contents:
         n = len(contents)
-        def _get(lst, i): return (lst[i] if lst and i < len(lst) else None)
+
+        def _get(lst, i):
+            return (lst[i] if lst and i < len(lst) else None)
 
         for i in range(n):
             content = (_get(contents, i) or "").strip()
 
             sy = _get(sy_list, i) or str(year)
             ey = _get(ey_list, i) or str(year)
-            sm = _get(sm_list, i); sd = _get(sd_list, i)
-            em = _get(em_list, i); ed = _get(ed_list, i)
+            sm = _get(sm_list, i)
+            sd = _get(sd_list, i)
+            em = _get(em_list, i)
+            ed = _get(ed_list, i)
 
             start = _compose_date(sy, sm, sd)
-            end   = _compose_date(ey, em, ed)
-            stxt  = _get(st_list, i)
+            end = _compose_date(ey, em, ed)
+            stxt = _normalize_item_status(_get(st_list, i))
 
             # Bỏ dòng trống hoàn toàn
-            if not content and not start and not end and not stxt:
+            if not content and not start and not end and not (stxt or "").strip():
                 continue
+
+            start_dt = _dt_from_ymd(start)
+            end_dt = _dt_from_ymd(end)
+            item_code = str(uuid.uuid4())
+            carry_count = 1 if stxt == "Chuyển kỳ sau" else 0
 
             it = PlanItems(
                 plan_id=p.id,
                 content=_inject_item_tags(content, start, end, stxt),
-                due_date=datetime.strptime(end, "%Y-%m-%d") if end else None
+                due_date=end_dt,
+                item_code=item_code,
+                origin_item_id=None,
+                carry_forward_from_id=None,
+                is_carried_forward=False,
+                carry_forward_count=carry_count,
+                status=stxt,
+                start_date=start_dt,
+                end_date=end_dt,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
             )
             db.add(it)
-            
+            db.flush()
+
+            if stxt == "Chuyển kỳ sau":
+                _upsert_carry_forward_item(db, p, it)
+
         db.commit()
 
     notify_user_ids = _unit_members_user_ids(db, _matrix_visible_unit_ids(db, user))
@@ -951,6 +1178,7 @@ def update_plan(
     p.description = (description or "").strip()
     p.updated_at = datetime.utcnow()
     db.add(p)
+    db.flush()
 
     # Chọn nguồn dữ liệu: ưu tiên field có []
     contents = item_contents2 or item_contents
@@ -965,14 +1193,37 @@ def update_plan(
     def _get(lst, i):
         return (lst[i] if lst and i < len(lst) else None)
 
-    # Luôn đồng bộ lại toàn bộ dòng công việc theo dữ liệu form hiện tại
+    old_rows = (
+        db.query(PlanItems)
+        .filter(PlanItems.plan_id == p.id)
+        .order_by(PlanItems.created_at.asc(), PlanItems.id.asc())
+        .all()
+    )
+
+    old_row_map = {}
+    for idx, old in enumerate(old_rows):
+        old_row_map[idx] = {
+            "id": old.id,
+            "item_code": getattr(old, "item_code", None),
+            "origin_item_id": getattr(old, "origin_item_id", None),
+            "carry_forward_from_id": getattr(old, "carry_forward_from_id", None),
+            "is_carried_forward": bool(getattr(old, "is_carried_forward", False)),
+            "carry_forward_count": int(getattr(old, "carry_forward_count", 0) or 0),
+            "status": _normalize_item_status(getattr(old, "status", None)),
+            "content": getattr(old, "content", None),
+        }
+
+    # Xóa toàn bộ bản ghi hiện tại nhưng giữ metadata cũ theo index để dựng lại
     db.query(PlanItems).filter(PlanItems.plan_id == p.id).delete(synchronize_session=False)
+
+    new_rows_status_by_index: Dict[int, str] = {}
 
     if contents:
         n = len(contents)
         for i in range(n):
-            content = (_get(contents, i) or "").strip()
+            old_meta = old_row_map.get(i)
 
+            content = (_get(contents, i) or "").strip()
             sy = _get(sy_list, i) or str(year)
             ey = _get(ey_list, i) or str(year)
             sm = _get(sm_list, i)
@@ -981,21 +1232,91 @@ def update_plan(
             ed = _get(ed_list, i)
 
             start = _compose_date(sy, sm, sd)
-            end   = _compose_date(ey, em, ed)
-            stxt  = _get(st_list, i)
+            end = _compose_date(ey, em, ed)
+            stxt = _normalize_item_status(_get(st_list, i))
 
-            # Bỏ dòng trống hoàn toàn
-            if not content and not start and not end and not stxt:
+            if not content and not start and not end and not (stxt or "").strip():
+                if old_meta and old_meta.get("status") == "Chuyển kỳ sau":
+                    old_stub = PlanItems(
+                        id=old_meta["id"],
+                        item_code=old_meta["item_code"],
+                    )
+                    _delete_auto_carry_forward_item(db, p, old_stub)
                 continue
 
-            it = PlanItems(
+            start_dt = _dt_from_ymd(start)
+            end_dt = _dt_from_ymd(end)
+
+            old_item_code = old_meta.get("item_code") if old_meta else None
+            old_origin_item_id = old_meta.get("origin_item_id") if old_meta else None
+            old_old_status = old_meta.get("status") if old_meta else ""
+
+            if old_item_code:
+                item_code = old_item_code
+            else:
+                item_code = str(uuid.uuid4())
+
+            origin_item_id = old_origin_item_id
+            if not origin_item_id:
+                origin_item_id = None
+
+            inherited_cf = int(old_meta.get("carry_forward_count", 0) or 0) if old_meta else 0
+            inherited_is_cf = bool(old_meta.get("is_carried_forward", False)) if old_meta else False
+
+            if stxt == "Chuyển kỳ sau":
+                if old_old_status == "Chuyển kỳ sau":
+                    carry_count = inherited_cf
+                else:
+                    carry_count = inherited_cf + 1
+            else:
+                carry_count = inherited_cf
+
+            new_item = PlanItems(
                 plan_id=p.id,
                 content=_inject_item_tags(content, start, end, stxt),
-                due_date=datetime.strptime(end, "%Y-%m-%d") if end else None
+                due_date=end_dt,
+                item_code=item_code,
+                origin_item_id=origin_item_id,
+                carry_forward_from_id=None,
+                is_carried_forward=inherited_is_cf,
+                carry_forward_count=carry_count,
+                status=stxt,
+                start_date=start_dt,
+                end_date=end_dt,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
             )
-            db.add(it)
+            db.add(new_item)
+            db.flush()
+
+            if not new_item.origin_item_id:
+                new_item.origin_item_id = new_item.id
+                db.add(new_item)
+
+            new_rows_status_by_index[i] = stxt
+
+            if stxt == "Chuyển kỳ sau":
+                _upsert_carry_forward_item(db, p, new_item)
+            elif old_meta and old_old_status == "Chuyển kỳ sau":
+                old_stub = PlanItems(
+                    id=old_meta["id"],
+                    item_code=old_meta["item_code"],
+                )
+                _delete_auto_carry_forward_item(db, p, old_stub)
+
+    # Xóa carry-forward thừa của các dòng cũ bị mất hẳn ở cuối danh sách
+    for idx, old_meta in old_row_map.items():
+        if idx in new_rows_status_by_index:
+            continue
+        if old_meta.get("status") == "Chuyển kỳ sau":
+            old_stub = PlanItems(
+                id=old_meta["id"],
+                item_code=old_meta["item_code"],
+            )
+            _delete_auto_carry_forward_item(db, p, old_stub)
 
     db.commit()
+    
     notify_user_ids = _unit_members_user_ids(db, _matrix_visible_unit_ids(db, user))
     _fire_plan_notify(
         notify_user_ids,
